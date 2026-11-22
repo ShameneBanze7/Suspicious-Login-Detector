@@ -5,9 +5,32 @@
     <artifactId>SuspiciousLoginDetector</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
+    
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>26</maven.compiler.release>
-        <exec.mainClass>com.mycompany.suspiciouslogindetector.SuspiciousLoginDetector</exec.mainClass>
+        
+        <!-- 
+          WHY THIS CHANGED:
+          I updated the mainClass to point directly to the 'DatabaseManager' instead of the default 'SuspiciousLoginDetector'.
+          This means that clicking the main "Run" button in NetBeans will immediately execute the database setup,
+          saving time and avoiding "Main class not found" errors during development.
+        -->
+        <exec.mainClass>com.mycompany.suspiciouslogindetector.DatabaseManager</exec.mainClass>
     </properties>
+    
+    <dependencies>
+        <!-- 
+          WHY THIS WAS ADDED:
+          The "No suitable driver found for jdbc:sqlite" error occurs because Maven doesn't include database drivers by default. 
+          I must explicitly declare the SQLite JDBC dependency here so Maven downloads the .jar file 
+          and adds it to our classpath. Without this, the Java code compiles, but crashes at runtime 
+          because it doesn't know how to actually talk to the SQLite database file.
+        -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.42.0.0</version>
+        </dependency>
+    </dependencies>
 </project>
