@@ -95,6 +95,15 @@ public class DatabaseManager {
             pstmt.setString(3, "10.0.0.5");
             pstmt.executeUpdate();
             System.out.println("Inserted 1 successful attempt for 'normal_user'.");
+            
+            // --- Scenario 3: Setting up a historical known IP for a user ---
+            // This is necessary so we can test the "New IP Address" rule later. 
+            // If alice logs in from 10.0.0.99 now, and then later from a different IP, the detector will catch it.
+            pstmt.setString(1, "alice");
+            pstmt.setInt(2, 1);                        // 1 = true (success)
+            pstmt.setString(3, "10.0.0.99");           // alice's normal, known IP
+            pstmt.executeUpdate();
+            System.out.println("Inserted historical login for 'alice' (Known IP).");
 
         } catch (SQLException e) {
             System.out.println("Error inserting data: " + e.getMessage());
