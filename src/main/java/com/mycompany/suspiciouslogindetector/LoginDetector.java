@@ -2,6 +2,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
+
 package com.mycompany.suspiciouslogindetector;
 
 import java.sql.Connection;
@@ -12,64 +13,76 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * The LoginDetector class reads recent attempts from the database and applies 
- * security rules to determine the risk level of each login.
+ * The LoginDetector class reads recent login attempts from the database and applies 
+ * a set of security rules to determine the risk level of each login.
+ * 
+ * I separated each rule into its own method so they are easy to test, maintain, and explain.
  */
 public class LoginDetector {
 
+    // The connection string for the local SQLite database
     private static final String URL = "jdbc:sqlite:logins.db";
 
     public static void main(String[] args) {
         System.out.println("--- Starting Security Analysis ---");
+        // Call the main analysis method
         analyzeLogins();
         System.out.println("--- Analysis Complete ---");
     }
 
+    /**
+     * The core engine that loops through unchecked logins and applies the rules.
+     */
     public static void analyzeLogins() {
-        // We only analyze attempts that haven't been checked yet (Pending)
+        // I only want to analyze attempts that have a 'Pending' status.
+        // This ensures I don't re-analyze logs that have already been processed.
         String selectSQL = "SELECT id, username, success, ip_address, attempt_time FROM login_attempts WHERE risk_level = 'Pending'";
 
+        // try-with-resources automatically closes the database connection and statements
         try (Connection conn = DriverManager.getConnection(URL);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(selectSQL)) {
 
+            // Loop through each pending login attempt
             while (rs.next()) {
+                // Extract data from the current row
                 int id = rs.getInt("id");
                 String username = rs.getString("username");
-                boolean success = rs.getInt("success") == 1;
+                boolean success = rs.getInt("success") == 1; // 1 = true, 0 = false
                 String ipAddress = rs.getString("ip_address");
                 String attemptTime = rs.getString("attempt_time");
 
+                // Initialize the risk score and a list to store the reasons
                 int score = 0;
                 StringBuilder reasons = new StringBuilder();
 
                 // --- APPLY RULES ---
                 
-                // Rule 1: Failed attempt (+1 point)
+                // Rule 1: Any failed attempt adds a base score of 1 point
                 if (!success) {
                     score += 1;
                     reasons.append("Failed attempt. ");
                 }
 
-                // Rule 2: Check for rapid failures (5+ failures in 10 mins) (+5 points)
+                // Rule 2: Check if this user has 5+ rapid failures in the last 10 minutes (+5 points)
                 if (checkFailedAttempts(conn, username, attemptTime)) {
                     score += 5;
                     reasons.append("Suspicious: 5+ failures within 10 minutes. ");
                 }
 
-                // Rule 3: Check for New IP Address on a successful login (+2 points)
+                // Rule 3: Check if a successful login is coming from an unknown IP (+2 points)
                 if (success && checkNewIp(conn, username, ipAddress, id)) {
                     score += 2;
                     reasons.append("New IP address for this user. ");
                 }
 
-                // Rule 4: Odd login time (+2 points)
+                // Rule 4: Check if the login happened during odd hours (+2 points)
                 if (checkOddTime(attemptTime)) {
                     score += 2;
                     reasons.append("Odd login hour. ");
                 }
 
-                // Determine Risk Level based on score
+                // Determine the Risk Level based on the final accumulated score
                 String riskLevel = "Normal";
                 if (score >= 5) {
                     riskLevel = "High Risk";
@@ -77,8 +90,9 @@ public class LoginDetector {
                     riskLevel = "Suspicious";
                 }
 
-                // Update the database with the findings
-                updateRiskLevel(conn, id, riskLevel, reasons.toString().trim());
+                // Update the database with the calculated risk level and reasons
+                // I added 'username' to the parameters so it prints correctly in the console
+                updateRiskLevel(conn, id, username, riskLevel, reasons.toString().trim());
             }
 
         } catch (SQLException e) {
@@ -86,12 +100,16 @@ public class LoginDetector {
         }
     }
 
-    // --- RULE METHODS ---
+    // ==========================================
+    //            RULE METHODS
+    // ==========================================
 
     /**
-     * Rule 1: Checks if there are 5 or more failures in a short time window.
+     * Rule 1: Checks if there are 5 or more failures within a 10-minute window.
+     * This detects rapid, brute-force password guessing attacks.
      */
     private static boolean checkFailedAttempts(Connection conn, String username, String currentTime) {
+        // The SQL query uses datetime math to look back 10 minutes from the current attempt's time
         String query = "SELECT COUNT(*) as fail_count FROM login_attempts " +
                        "WHERE username = ? AND success = 0 AND attempt_time >= datetime(?, '-10 minutes')";
         
@@ -101,6 +119,7 @@ public class LoginDetector {
             ResultSet rs = pstmt.executeQuery();
             
             if (rs.next()) {
+                // If we find 5 or more failures in that window, trigger the rule
                 return rs.getInt("fail_count") >= 5;
             }
         } catch (SQLException e) {
@@ -111,8 +130,10 @@ public class LoginDetector {
 
     /**
      * Rule 2: Checks if a successful login is coming from an IP the user hasn't used before.
+     * This detects account takeovers where a hacker logs in from a new location.
      */
     private static boolean checkNewIp(Connection conn, String username, String currentIp, int currentId) {
+        // We look for any PREVIOUS successful logins from this user with this IP address
         String query = "SELECT COUNT(*) as ip_count FROM login_attempts " +
                        "WHERE username = ? AND ip_address = ? AND success = 1 AND id < ?";
         
@@ -123,6 +144,7 @@ public class LoginDetector {
             ResultSet rs = pstmt.executeQuery();
             
             if (rs.next()) {
+                // If the count is 0, it means we found NO previous successful logins from this IP.
                 return rs.getInt("ip_count") == 0;
             }
         } catch (SQLException e) {
@@ -132,11 +154,13 @@ public class LoginDetector {
     }
 
     /**
-     * Rule 3: Checks if the login happened during odd hours (12 AM to 5 AM).
+     * Rule 3: Checks if the login happened during odd hours (midnight to 5 AM).
+     * Attackers often strike when users and IT staff are asleep.
      */
     private static boolean checkOddTime(String attemptTime) {
         try {
-            // attempt_time format is usually "YYYY-MM-DD HH:MM:SS"
+            // attempt_time format is "YYYY-MM-DD HH:MM:SS"
+            // We extract the hour (characters at index 11 and 12)
             int hour = Integer.parseInt(attemptTime.substring(11, 13));
             return (hour >= 0 && hour <= 5); 
         } catch (Exception e) {
@@ -147,7 +171,7 @@ public class LoginDetector {
     /**
      * Updates the database row with the calculated risk level and reasons.
      */
-    private static void updateRiskLevel(Connection conn, int id, String riskLevel, String reason) {
+    private static void updateRiskLevel(Connection conn, int id, String username, String riskLevel, String reason) {
         String updateSQL = "UPDATE login_attempts SET risk_level = ?, reason = ? WHERE id = ?";
         
         try (PreparedStatement pstmt = conn.prepareStatement(updateSQL)) {
@@ -156,9 +180,8 @@ public class LoginDetector {
             pstmt.setInt(3, id);
             pstmt.executeUpdate();
             
-            // Only print if it found something interesting
+            // Only print to the console if the attempt was flagged as suspicious or high risk
             if (!riskLevel.equals("Normal")) {
-                String username = null;
                 System.out.println("Flagged ID " + id + " (" + username + "): " + riskLevel + " -> " + reason);
             }
             
