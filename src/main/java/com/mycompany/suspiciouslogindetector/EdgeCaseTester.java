@@ -24,9 +24,9 @@ public class EdgeCaseTester {
     public static void main(String[] args) {
         System.out.println("--- Inserting Edge Case Test Data ---");
         
-        // We use a try-with-resources block to open the database connection.
+        // I added USER and PASSWORD to the getConnection method for MySQL
         // It will automatically close the connection when the block finishes.
-        try (Connection conn = DriverManager.getConnection(URL)) {
+           try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD)) {
             
             // CASE 1: Exactly 4 failures in a short time. 
             // The rule triggers at 5, so this should remain "Normal" (Score: 1 for each failure, but no +5 penalty).
@@ -77,7 +77,7 @@ public class EdgeCaseTester {
      * This tests if our detector correctly ignores failures that are spread out over time.
      */
     private static void insertAttemptsWithDelay(Connection conn, String username, int success, String ip, int count) throws SQLException {
-        // We use SQLite's date math function to insert rows into the PAST.
+        // i used SQLite's date math function to insert rows into the PAST.
         // datetime('now', '-30 minutes') will make the attempt look like it happened 30 mins ago.
         String sql = "INSERT INTO login_attempts(username, success, ip_address, attempt_time) VALUES(?, ?, ?, datetime('now', '-' || ? || ' minutes'))";
         

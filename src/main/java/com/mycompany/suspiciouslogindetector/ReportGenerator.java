@@ -30,10 +30,10 @@ public class ReportGenerator {
         System.out.println("=========================================");
 
         // The SQL query filters out 'Normal' and 'Pending' attempts.
-        // We use ORDER BY risk_level DESC to ensure 'High Risk' shows up before 'Suspicious'.
+        // I used ORDER BY risk_level DESC to ensure 'High Risk' shows up before 'Suspicious'.
         String query = "SELECT username, MAX(ip_address) as ip_address, MAX(attempt_time) as attempt_time, risk_level, MAX(reason) as reason FROM login_attempts WHERE risk_level != 'Normal' AND risk_level != 'Pending' GROUP BY username, risk_level ORDER BY risk_level DESC";
         
-        // We use a try-with-resources block. This automatically closes the Connection, 
+        // I used a try-with-resources block. This automatically closes the Connection, 
         // Statement, and ResultSet when the block finishes, preventing memory leaks.
         // I added USER and PASSWORD here so it can connect to MySQL
         try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
