@@ -20,9 +20,11 @@ import java.sql.Statement;
  */
 public class LoginDetector {
 
-    // The connection string for the local SQLite database
-    private static final String URL = "jdbc:sqlite:logins.db";
-
+    // MySQL Database Connection Credentials
+    private static final String URL = "jdbc:mysql://localhost:3306/login_security"; // Local database URL
+    private static final String USER = "root";                                      // MySQL username
+    private static final String PASSWORD = "Comeonprompt0707!";                     // MySQL password
+    
     public static void main(String[] args) {
         System.out.println("--- Starting Security Analysis ---");
         // Call the main analysis method
@@ -39,7 +41,8 @@ public class LoginDetector {
         String selectSQL = "SELECT id, username, success, ip_address, attempt_time FROM login_attempts WHERE risk_level = 'Pending'";
 
         // try-with-resources automatically closes the database connection and statements
-        try (Connection conn = DriverManager.getConnection(URL);
+        // I added USER and PASSWORD here so it can connect to MySQL
+        try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(selectSQL)) {
 
@@ -48,7 +51,7 @@ public class LoginDetector {
                 // Extract data from the current row
                 int id = rs.getInt("id");
                 String username = rs.getString("username");
-                boolean success = rs.getInt("success") == 1; // 1 = true, 0 = false
+                boolean success = rs.getBoolean("success"); // MySQL uses boolean (true/false)
                 String ipAddress = rs.getString("ip_address");
                 String attemptTime = rs.getString("attempt_time");
 
@@ -109,9 +112,9 @@ public class LoginDetector {
      * This detects rapid, brute-force password guessing attacks.
      */
     private static boolean checkFailedAttempts(Connection conn, String username, String currentTime) {
-        // The SQL query uses datetime math to look back 10 minutes from the current attempt's time
+        // I updated this query to use MySQL's INTERVAL syntax instead of SQLite's datetime() function
         String query = "SELECT COUNT(*) as fail_count FROM login_attempts " +
-                       "WHERE username = ? AND success = 0 AND attempt_time >= datetime(?, '-10 minutes')";
+                       "WHERE username = ? AND success = false AND attempt_time >= (TIMESTAMP(?) - INTERVAL 10 MINUTE)";
         
         try (PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);
@@ -134,8 +137,9 @@ public class LoginDetector {
      */
     private static boolean checkNewIp(Connection conn, String username, String currentIp, int currentId) {
         // We look for any PREVIOUS successful logins from this user with this IP address
+        // I changed 'success = 1' to 'success = true' for MySQL
         String query = "SELECT COUNT(*) as ip_count FROM login_attempts " +
-                       "WHERE username = ? AND ip_address = ? AND success = 1 AND id < ?";
+                       "WHERE username = ? AND ip_address = ? AND success = true AND id < ?";
         
         try (PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);

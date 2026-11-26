@@ -16,9 +16,11 @@ import java.sql.SQLException;
  */
 public class EdgeCaseTester {
     
-    // The connection string for the local SQLite database
-    private static final String URL = "jdbc:sqlite:logins.db";
-
+       // MySQL Database Connection Credentials
+    private static final String URL = "jdbc:mysql://localhost:3306/login_security"; // Local database URL
+    private static final String USER = "root";                                      // MySQL username
+    private static final String PASSWORD = "Comeonprompt0707!";                   // MySQL password
+    
     public static void main(String[] args) {
         System.out.println("--- Inserting Edge Case Test Data ---");
         
