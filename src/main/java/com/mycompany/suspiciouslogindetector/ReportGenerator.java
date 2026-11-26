@@ -2,6 +2,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
+
 package com.mycompany.suspiciouslogindetector;
 
 // Import the JDBC classes required for database connection and querying
@@ -17,9 +18,11 @@ import java.sql.Statement;
  */
 public class ReportGenerator {
     
-    // The connection string for the local SQLite database file
-    private static final String URL = "jdbc:sqlite:logins.db";
-
+    // MySQL Database Connection Credentials
+    private static final String URL = "jdbc:mysql://localhost:3306/login_security"; // Local database URL
+    private static final String USER = "root";                                      // MySQL username
+    private static final String PASSWORD = "Comeonprompt0707!";                   // MySQL password
+    
     public static void main(String[] args) {
         // Print a header for the report so it looks clean in the console
         System.out.println("=========================================");
@@ -28,10 +31,12 @@ public class ReportGenerator {
 
         // The SQL query filters out 'Normal' and 'Pending' attempts.
         // We use ORDER BY risk_level DESC to ensure 'High Risk' shows up before 'Suspicious'.
-       String query = "SELECT username, ip_address, attempt_time, risk_level, reason FROM login_attempts WHERE risk_level != 'Normal' AND risk_level != 'Pending' GROUP BY username, risk_level ORDER BY risk_level DESC";
+        String query = "SELECT username, MAX(ip_address) as ip_address, MAX(attempt_time) as attempt_time, risk_level, MAX(reason) as reason FROM login_attempts WHERE risk_level != 'Normal' AND risk_level != 'Pending' GROUP BY username, risk_level ORDER BY risk_level DESC";
+        
         // We use a try-with-resources block. This automatically closes the Connection, 
         // Statement, and ResultSet when the block finishes, preventing memory leaks.
-        try (Connection conn = DriverManager.getConnection(URL);
+        // I added USER and PASSWORD here so it can connect to MySQL
+        try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
 
